@@ -1,0 +1,420 @@
+using <stdarg.h>::{ va_list, va_start, vsnprintf, va_end }
+using <ctype.h>::{ isdigit }
+
+using ast
+using err::{ assert }
+using printf::{ printf }
+using string
+
+static string::String+64000 mut buffer = {0};
+
+/**
+ * A helper variadic function that wraps `vsnprintf()` to help
+ * with the `@format::with()` macro.
+ */
+export fn with_arguments(char *fmt, ...) -> char *
+  model safe(return)
+  model nullterm(return)
+{
+  va_list mut args;
+  buffer.clear();
+  va_start(args, fmt);
+  vsnprintf(buffer.mem, 64000, fmt, args);
+  va_end(args);
+  return as<char *>(buffer.cstr());
+}
+
+/**
+ * Creates a formatted string from a variety of special tokens with traditional
+ * `printf` style specifiers supported.
+ *
+ *  The following special tokens are supported in a format string:
+ *   * `{}` - Treats argument like a _struct_, calling `.display()` for a `char *`
+ *   * `{*}` - Treats argument like a _pointer to a struct_, calling `->display()`  for a `char *`
+ *   * `{0..9}` - References argument by position. Treatment is the same as `{}`
+ *   * `{0..9%X}` - References argument by position with format. Treatment is like `printf`
+ *   * `{*0..9}` - References pointer argument by position. Treatment is same as `{*}`
+ *   * `{$0..9}` - References argument _identifier name_ by position and uses it inline
+ *
+ * Structs should implement a `display() -> char *` method like in the example below:
+ *
+ * ```
+ * using format
+ * using log
+ * using string
+ *
+ * struct Vector {
+ *   float x;
+ *   float y;
+ * }
+ *
+ * fn display(Vector *self) -> char * {
+ *   new+64000 out = string::make();
+ *   out.format("Vector { x: %0.2f, y: %0.2f }", self->x, self->y);
+ *   return out.cstr();
+ * }
+ *
+ * fn main() -> {
+ *   let vec = Vector { x: 1.23, y: 2.46 };
+ *   log::info("%s", @format::with("{}", vec)); // Vector { x: 1.23, y: 2.46 }
+ *   return 0;
+ * }
+ * ```
+ */
+export macro with() {
+  new+64000 ctx = ast::from_macro();
+  let type = ctx.args[0].t;
+
+  if type == ast::Expression::Name || type == ast::Expression::Literal {
+    new+64000 mut out = string::make();
+
+    let arg = ctx.args[0].v.string;
+    if 0 != arg {
+      static_attest(safe(arg));
+      static_attest(nullterm(arg));
+      if type == ast::Expression::Literal &&
+        (string::cstr_eq("true", arg) || string::cstr_eq("false", arg))
+      {
+        printf("\"%s\"", arg);
+      } else {
+        printf("%s", arg);
+      }
+    }
+  } else {
+    char * mut fmt = as<char mut *>(ctx.args[0].v.string);
+
+    if 0 == fmt {
+      fmt = "";
+    }
+
+    static_attest(safe(fmt));
+    static_attest(nullterm(fmt));
+
+    char mut last_last_last_last_last_last_ch = 0;
+    char mut last_last_last_last_last_ch = 0;
+    char mut last_last_last_last_ch = 0;
+    char mut last_last_last_ch = 0;
+    char mut last_last_ch = 0;
+    char mut last_ch = 0;
+    usize mut offset = 1;
+    let size = string::strlen(fmt);
+
+    new+64000 mut buf = string::make();
+
+    buf.format("format::with_arguments(\"");
+    for (usize mut i = 0; i < size; ++i) {
+      let ch = fmt[i];
+
+      if '{' == last_ch && '}' == ch {
+        if 0 != ctx.args[offset].v.string {
+          buf.pop();
+          buf.format("%s", "%s");
+          offset++;
+        } else {
+          buf.format("{}");
+        }
+      } else if '{' == last_last_ch && '*' == last_ch && '}' == ch {
+        if 0 != ctx.args[offset].v.string {
+          buf.pop();
+          buf.pop();
+          buf.format("%s", "%s");
+          offset++;
+        } else {
+          buf.format("{*}");
+        }
+      } else if '{' == last_last_ch && 0 != unsafe<int>(isdigit(last_ch)) && '}' == ch {
+        buf.pop();
+        buf.pop();
+
+        usize mut j = as<usize>(last_ch) - 48 + 1;
+        let arg = ctx.args[j].v.string;
+        let t = ctx.args[j].t;
+        if 0 != arg {
+          static_attest(safe(arg));
+          static_attest(nullterm(arg));
+          if (string::cstr_eq("true", arg) || string::cstr_eq("false", arg)) {
+            buf.format("%s", arg);
+          } else {
+            buf.format("%s", "%s");
+          }
+        }
+      } else if '{' == last_last_last_ch && '*' == last_last_ch && 0 != unsafe<int>(isdigit(last_ch)) && '}' == ch {
+        buf.pop();
+        buf.pop();
+        buf.pop();
+
+        usize mut j = as<usize>(last_ch) - 48 + 1;
+        let arg = ctx.args[j].v.string;
+        let t = ctx.args[j].t;
+        if 0 != arg {
+          static_attest(safe(arg));
+          static_attest(nullterm(arg));
+          if (string::cstr_eq("true", arg) || string::cstr_eq("false", arg)) {
+            buf.format("%s", arg);
+          } else {
+            buf.format("%s", "%s");
+          }
+        }
+      } else if '{' == last_last_last_ch && '$' == last_last_ch && 0 != unsafe<int>(isdigit(last_ch)) && '}' == ch {
+        buf.pop();
+        buf.pop();
+        buf.pop();
+
+        usize mut j = as<usize>(last_ch) - 48 + 1;
+        let arg = ctx.args[j].v.string;
+        let t = ctx.args[j].t;
+        if 0 != arg {
+          static_attest(safe(arg));
+          static_attest(nullterm(arg));
+          buf.format("%s", arg);
+        }
+      } else if (
+        '{' == last_last_last_last_ch &&
+        0 != unsafe<int>(isdigit(last_last_last_ch)) &&
+        '%' == last_last_ch &&
+        0 != last_ch &&
+        '}' == ch
+      ) {
+        buf.pop();
+        buf.pop();
+        buf.pop();
+        buf.pop();
+
+        usize mut j = as<usize>(last_last_last_ch) - 48 + 1;
+        let arg = ctx.args[j].v.string;
+        let t = ctx.args[j].t;
+        if 0 != arg {
+          static_attest(safe(arg));
+          static_attest(nullterm(arg));
+          buf.push('%');
+          buf.push(last_ch);
+        }
+      } else if (
+        '{' == last_last_last_last_last_ch &&
+        0 != unsafe<int>(isdigit(last_last_last_last_ch)) &&
+        '%' == last_last_last_ch &&
+        0 != last_last_ch &&
+        0 != last_ch &&
+        '}' == ch
+      ) {
+        buf.pop();
+        buf.pop();
+        buf.pop();
+        buf.pop();
+        buf.pop();
+
+        usize mut j = as<usize>(last_last_last_last_ch) - 48 + 1;
+        let arg = ctx.args[j].v.string;
+        let t = ctx.args[j].t;
+        if 0 != arg {
+          static_attest(safe(arg));
+          static_attest(nullterm(arg));
+          buf.push('%');
+          buf.push(last_last_ch);
+          buf.push(last_ch);
+        }
+      } else if (
+        '{' == last_last_last_last_last_last_ch &&
+        0 != unsafe<int>(isdigit(last_last_last_last_last_ch)) &&
+        '%' == last_last_last_last_ch &&
+        0 != last_last_last_ch &&
+        0 != last_last_ch &&
+        0 != last_ch &&
+        '}' == ch
+      ) {
+        buf.pop();
+        buf.pop();
+        buf.pop();
+        buf.pop();
+        buf.pop();
+        buf.pop();
+
+        usize mut j = as<usize>(last_last_last_last_last_ch) - 48 + 1;
+        let arg = ctx.args[j].v.string;
+        let t = ctx.args[j].t;
+        if 0 != arg {
+          static_attest(safe(arg));
+          static_attest(nullterm(arg));
+          buf.push('%');
+          buf.push(last_last_last_ch);
+          buf.push(last_last_ch);
+          buf.push(last_ch);
+        }
+      } else if 0 != ch {
+        buf.push(ch);
+      }
+
+      last_last_last_last_last_last_ch = last_last_last_last_last_ch;
+      last_last_last_last_last_ch = last_last_last_last_ch;
+      last_last_last_last_ch = last_last_last_ch;
+      last_last_last_ch = last_last_ch;
+      last_last_ch = last_ch;
+      last_ch = ch;
+    }
+
+    buf.format("\"");
+    printf("%s", buf.cstr());
+    buf.clear();
+
+    offset = 1;
+    last_last_last_last_last_last_ch = 0;
+    last_last_last_last_last_ch = 0;
+    last_last_last_last_ch = 0;
+    last_last_last_ch = 0;
+    last_last_ch = 0;
+    last_ch = 0;
+
+    int mut curly_depth = 0;
+
+    for (usize mut i = 0; offset < 100 && i < size; ++i) {
+      let ch = fmt[i];
+      char mut next_ch = 0;
+
+      if i + 1 < size {
+        next_ch = fmt[i + 1];
+      }
+
+      if 0 == ctx.args[offset].v.string {
+        break;
+      }
+
+      let arg = ctx.args[offset].v.string;
+      let type = ctx.args[offset].t;
+
+      if '{' == ch {
+        curly_depth++;
+      } else if '}' == ch {
+        curly_depth--;
+      }
+
+      if curly_depth < 0 {
+        curly_depth = 0;
+      }
+
+      if '{' == last_ch && '}' == ch {
+        printf(", %s.display()", arg);
+        offset++;
+      } else if '{' == last_last_ch && '*' == last_ch && '}' == ch {
+        printf(", %s->display()", arg);
+        offset++;
+      } else if (
+        '{' == last_last_ch &&
+        0 != unsafe<int>(isdigit(last_ch)) &&
+        '}' == ch
+      ) {
+        usize mut j = as<usize>(last_ch) - 48 + 1;
+        let arg = ctx.args[j].v.string;
+        let t = ctx.args[j].t;
+
+        if 0 != arg {
+          static_attest(safe(arg));
+          static_attest(nullterm(arg));
+          if t == ast::Expression::Name {
+            printf(", %s.display()", arg);
+          }
+        }
+      } else if '{' == last_last_last_ch && '*' == last_last_ch && 0 != unsafe<int>(isdigit(last_ch)) && '}' == ch {
+        usize mut j = as<usize>(last_ch) - 48 + 1;
+        let arg = ctx.args[j].v.string;
+        let t = ctx.args[j].t;
+
+        if 0 != arg {
+          static_attest(safe(arg));
+          static_attest(nullterm(arg));
+          if t == ast::Expression::Name {
+            printf(", %s->display()", arg);
+          } else if t == ast::Expression::LiteralString {
+            printf(", \"%s\"", arg);
+          } else {
+            printf(", (char *) %s", arg);
+          }
+        }
+      } else if ( // {[0-9]%[a-z]}
+        '{' == last_last_last_last_ch &&
+        0 != unsafe<int>(isdigit(last_last_last_ch)) &&
+        '%' == last_last_ch &&
+        0 != last_ch &&
+        '}' == ch
+      ) {
+        usize mut j = 1 + as<usize>(last_last_last_ch) - 48;
+        let arg = ctx.args[j].v.string;
+        let t = ctx.args[j].t;
+
+        if 0 != arg {
+          static_attest(safe(arg));
+          static_attest(nullterm(arg));
+          if (string::cstr_eq("true", arg) || string::cstr_eq("false", arg)) {
+            printf(", \"%s\"", arg);
+          } else {
+            printf(", %s", arg);
+          }
+        }
+      } else if (
+        '{' == last_last_last_last_last_ch &&
+        0 != unsafe<int>(isdigit(last_last_last_last_ch)) &&
+        '%' == last_last_last_ch &&
+        0 != last_last_ch &&
+        0 != last_ch &&
+        '}' == ch
+      ) {
+        usize mut j = 1 + as<usize>(last_last_last_last_ch) - 48;
+        let arg = ctx.args[j].v.string;
+        let t = ctx.args[j].t;
+
+        if 0 != arg {
+          static_attest(safe(arg));
+          static_attest(nullterm(arg));
+          if (string::cstr_eq("true", arg) || string::cstr_eq("false", arg)) {
+            printf(", \"%s\"", arg);
+          } else {
+            printf(", %s", arg);
+          }
+        }
+      } else if (
+        '{' == last_last_last_last_last_last_ch &&
+        0 != unsafe<int>(isdigit(last_last_last_last_last_ch)) &&
+        '%' == last_last_last_last_ch &&
+        0 != last_last_last_ch &&
+        0 != last_last_ch &&
+        0 != last_ch &&
+        '}' == ch
+      ) {
+        usize mut j = 1 + as<usize>(last_last_last_last_ch) - 48;
+        let arg = ctx.args[j].v.string;
+        let t = ctx.args[j].t;
+
+        if 0 != arg {
+          static_attest(safe(arg));
+          static_attest(nullterm(arg));
+          if (string::cstr_eq("true", arg) || string::cstr_eq("false", arg)) {
+            printf(", \"%s\"", arg);
+          } else {
+            printf(", %s", arg);
+          }
+        }
+      } else if 0 == curly_depth && ('%' == last_last_ch || '%' == last_ch) {
+        if (ch >= 65 && ch <= 90) || (ch >= 97 && ch <= 122) || (42 == ch) || (46 == ch) || (35 == ch) {
+          if ctx.args[offset].t == ast::Expression::LiteralString {
+            printf(", \"%s\"", arg);
+          } else if type == ast::Expression::Literal &&
+            (string::cstr_eq("true", arg) || string::cstr_eq("false", arg))
+          {
+            printf(", \"%s\"", arg);
+          } else {
+            printf(", %s", arg);
+          }
+          offset++;
+        }
+      }
+
+      last_last_last_last_last_last_ch = last_last_last_last_last_ch;
+      last_last_last_last_last_ch = last_last_last_last_ch;
+      last_last_last_last_ch = last_last_last_ch;
+      last_last_last_ch = last_last_ch;
+      last_last_ch = last_ch;
+      last_ch = ch;
+    }
+
+    printf(")");
+  }
+}

@@ -1,0 +1,27 @@
+[project]
+version = "0.1.0"
+name = "format"
+cincludes = []
+cobjects = []
+pkgconfig = []
+cflags = []
+lflags = []
+
+[variants]
+default = []
+
+[dependencies]
+ast = "*"
+atoi = "*"
+list = "*"
+log = "*"
+mem = "*"
+printf = "*"
+runtime-assert = "*"
+string = "*"
+
+[repos]
+atoi = "git://github.com/zzmodules/atoi"
+list = "git://github.com/zzmodules/list"
+printf = "git://github.com/zzmodules/printf"
+runtime-assert = "git://github.com/zzmodules/runtime-assert"

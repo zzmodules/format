@@ -1,0 +1,70 @@
+using format
+using log
+using printf::{ printf }
+using string
+using runtime_assert::{ assert }
+using types::{ float }
+
+struct Vector {
+  float x;
+  float y;
+}
+
+union Point {
+  Vector vector;
+  Vector from;
+};
+
+fn display(Vector *self) -> char * {
+  new+64000 mut out = string::make();
+
+  if 0.0 == unsafe<float>(self->x - as<int>(self->x)) {
+    out.format("Vector { x: %d, y: %d }", as<int>(self->x), as<int>(self->y));
+  } else {
+    out.format("Vector { x: %0.2f, y: %0.2f }", self->x, self->y);
+  }
+
+  return out.cstr();
+}
+
+fn main () -> int {
+  {
+    let vec = Vector { x: 1.23, y: 2.46 };
+    let result = as<char *>(@format::with("{}", vec));
+    char *expected = "Vector { x: 1.23, y: 2.46 }";
+    log::info("%s", result);
+    static_attest(0 == result || nullterm(result));
+    assert(string::cstr_eq(result, expected));
+  }
+
+  {
+    let vec = Vector { x: 2.46, y: 44.55 };
+    let result = as<char *>(@format::with("{}", vec));
+    char *expected = "Vector { x: 2.46, y: 44.55 }";
+    log::info("%s", result);
+    static_attest(0 == result || nullterm(result));
+    assert(string::cstr_eq(result, expected));
+  }
+
+  {
+    let vec = Vector { x: 123, y: 456 };
+    let result = as<char *>(@format::with("{}", vec));
+    char *expected = "Vector { x: 123, y: 456 }";
+    log::info("%s", result);
+    static_attest(0 == result || nullterm(result));
+    assert(string::cstr_eq(result, expected));
+  }
+
+  {
+    int x = 1;
+    int y = 2;
+    int z = 3;
+    let result = as<char *>(@format::with("w = {3%d} {2%i} {1%u} {0%d}", x, y, z, 4));
+    char *expected = "w = 4 3 2 1";
+    log::info("%s", result);
+    static_attest(0 == result || nullterm(result));
+    assert(string::cstr_eq(result, expected));
+  }
+
+  return 0;
+}
